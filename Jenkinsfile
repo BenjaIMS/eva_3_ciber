@@ -14,7 +14,7 @@ pipeline {
             steps {
                 echo 'Ejecutando prueba de humo (smoke test)...'
                 sh '''
-                    docker rm -f securedev-test 2>/dev/null  true
+                    docker rm -f securedev-test 2>/dev/null || true
                     docker run -d --name securedev-test -e SECRET_KEY=clave-test securedev-app:latest
                     sleep 6
                     docker exec securedev-test python -c "import urllib.request,sys; r=urllib.request.urlopen('http://localhost:8000/health'); print('Codigo:', r.status); sys.exit(0 if r.status==200 else 1)"
@@ -28,10 +28,19 @@ pipeline {
             steps {
                 echo 'Desplegando la aplicacion...'
                 sh '''
-                    docker rm -f securedev-prod 2>/dev/null  true
+                    docker rm -f securedev-prod 2>/dev/null || true
                     docker run -d --name securedev-prod --restart unless-stopped -p 8001:8000 -e SECRET_KEY=clave-lab securedev-app:latest
+                    sleep 5
                 '''
-                echo 'Aplicacion desplegada en http://localhost:8001/'
+                echo 'Aplicacion desplegada en http://localhost:8001'
+            }
+        }
+
+        stage('Seguridad - OWASP ZAP') {
+            steps {
+                echo 'Ejecutando analisis de seguridad con OWASP ZAP...'
+                sh 'docker run --rm --network host -v /home/kali/zap-reports:/zap/wrk:rw ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://localhost:8001 -r zap-report.html -I'
+                echo 'Reporte ZAP generado en /home/kali/zap-reports/zap-report.html'
             }
         }
     }
